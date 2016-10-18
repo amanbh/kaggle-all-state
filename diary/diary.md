@@ -47,5 +47,5 @@ id cat1 ... cat116 cont1 ... cont14
 - Jupyter notebook cheatsheet : https://www.cheatography.com/weidadeyue/cheat-sheets/jupyter-notebook/
 - Installed yhat/ggplot : conda install -c bokeh ggplot
 - Adding Git filters for ipynb : http://pascalbugnion.net/blog/ipython-notebooks-and-git.html
-
+- Make a rudimentary RandomForestRegressor for first submission
 
