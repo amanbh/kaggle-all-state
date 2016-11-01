@@ -42,9 +42,11 @@ class XgbWrapper(object):
 
 
 class LightgbmWrapper(object):
-    def __init__(self, seed=0, params=None):
+    def __init__(self, seed=0, params=None, pyLightGBM_managed=True):
         self.params = params
-        self.clf = GBMRegressor(**params)
+        if pyLightGBM_managed: 
+            self.clf = GBMRegressor(**params)
+        self.params['pyLightGBM_managed'] = pyLightGBM_managed
         self.params['seed'] = seed
 
     def train(self, x_train, y_train, x_valid, y_valid):

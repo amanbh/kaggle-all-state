@@ -72,7 +72,7 @@ class SklearnWrapper(object):
         params['random_state'] = seed
         self.clf = clf(**params)
 
-    def train(self, x_train, y_train):
+    def train(self, x_train, y_train, x_valid, y_valid):
         self.clf.fit(x_train, y_train)
 
     def predict(self, x):
@@ -83,14 +83,37 @@ class XgbWrapper(object):
     def __init__(self, seed=0, params=None):
         self.param = params
         self.param['seed'] = seed
-        self.nrounds = params.pop('nrounds', 250)
+        self.nrounds = params.pop('nrounds', 10000)
+        self.shift = params.pop('shift', 200)
+        self.num_folds_trained = 1
 
-    def train(self, x_train, y_train):
-        dtrain = xgb.DMatrix(x_train, label=y_train)
+    def evalerror(self, preds, dtrain):
+        return 'mae', mean_absolute_error(np.exp(preds) - self.shift,
+                                          np.exp(dtrain.get_label()) - self.shift)
+
+    def train(self, x_train, y_train, x_valid, y_valid):
+        dtrain = xgb.DMatrix(x_train, label=np.log(y_train + self.shift))
+        eval_error_func = lambda p,d : self.evalerror(p,d)
+        # if self.num_folds_trained == 0:
+        #     res = xgb.cv(self.param, dtrain, num_boost_round=self.nrounds, nfold=5, seed=SEED,
+        #                  stratified=False, early_stopping_rounds=25, verbose_eval=10, show_stdv=False,
+        #                  feval=eval_error_func)
+        #     best_nrounds = res.shape[0] - 1
+        #     cv_mean = res.iloc[-1, 0]
+        #     print ('[XgbWrapper.train.cv] CV mean = {:.4f}'.format(cv_mean))
+        #     print ('[XgbWrapper.train.cv] Best Rounds = {}'.format(best_nrounds))
+        #     self.nrounds = best_nrounds
+        # self.num_folds_trained += 1
+
+        # dvalid = xgb.DMatrix(x_valid, label=np.log(y_valid + self.shift))
+        # self.gbdt = xgb.train(self.param, dtrain, self.nrounds,
+        #                       evals=[(dvalid, 'valid')], verbose_eval=10, feval=eval_error_func,
+        #                       early_stopping_rounds=25)
+
         self.gbdt = xgb.train(self.param, dtrain, self.nrounds)
 
     def predict(self, x):
-        return self.gbdt.predict(xgb.DMatrix(x))
+        return np.exp(self.gbdt.predict(xgb.DMatrix(x))) - self.shift
 
 
 class LightgbmWrapper(object):
@@ -150,6 +173,16 @@ def load_results_from_json(filename):
         return res
 
 
+def load_results_from_csv(oof_train_filename, oof_test_filename):
+    res = dict({'name': oof_train_filename})
+    res['oof_train'] = np.array(pd.read_csv(oof_train_filename)['loss']).reshape(-1,1)
+    res['oof_test']  = np.array(pd.read_csv(oof_test_filename)['loss']).reshape(-1,1)
+    return res
+
+
+res_keras = load_results_from_csv('keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv', 'keras_1/submission_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv')
+print("Keras_1-CV: {}".format(mean_absolute_error(y_train, res_keras['oof_train'])))
+
 if False:
     et_params = {
         'n_jobs': 4,
@@ -183,88 +216,173 @@ if False:
 # print("RF-CV: {}".format(mean_absolute_error(y_train, rf_oof_train)))
 
 
-xgb_params = {
-    'seed': 0,
-    'colsample_bytree': 0.7,
-    'silent': 0,
-    'subsample': 0.7,
-    'learning_rate': 0.075,
-    'objective': 'reg:linear',
-    'max_depth': 2,
-    'num_parallel_tree': 1,
-    'min_child_weight': 1,
-    'eval_metric': 'mae',
-    'nrounds': 30,
-    'verbose': 1,
-}
+if False:
+    xgb_params = {
+        'seed': 0,
+        'colsample_bytree': 0.5,
+        'silent': 1,
+        'subsample': 0.8,
+        'learning_rate': 0.01,
+        'max_depth': 12,
+        'num_parallel_tree': 1,
+        'min_child_weight': 1,
+        'nrounds': 1800,
+        'alpha': 1,
+        'gamma': 1,
+        'verbose_eval': 10,
+        'shift': 200
+        # 'verbose': 1,
+        # 'eval_metric': 'mae',
+        # 'objective': 'reg:linear',
+    }
+    xg = XgbWrapper(seed=SEED, params=xgb_params)
+    xgb_oof_train, xgb_oof_test = get_oof(xg)
+    # save_results_to_json('model_xgb_1', xgb_params, xgb_oof_test, xgb_oof_train)
+    # save_results_to_json('model_xgb_2', xgb_params, xgb_oof_test, xgb_oof_train)
+    # save_results_to_json('model_xgb_3', xgb_params, xgb_oof_test, xgb_oof_train) # Fix incorrect sign of shift term in predictions from model_2
+res_xgb = load_results_from_json('model_xgb_3.json')
+print("XG-CV: {}".format(mean_absolute_error(y_train, res_xgb['oof_train'])))
 
-#  xg = XgbWrapper(seed=SEED, params=xgb_params)
-#  xg_oof_train, xg_oof_test = get_oof(xg)
-#  print("XG-CV: {}".format(mean_absolute_error(y_train, xg_oof_train)))
-#
 
 
-lightgbm_params_fair = {
-    'exec_path': '../../../LightGBM/lightgbm',
-    'config': '',
-    'application': 'regression-fair',
-    'num_iterations': 20000,
-    'learning_rate': 0.002,
-    'num_leaves': 31,
-    'tree_learner': 'serial',
-    'num_threads': 4,
-    'min_data_in_leaf': 100,
-    'metric': 'l1',
-    'feature_fraction': 0.9,
-    'feature_fraction_seed': SEED,
-    'bagging_fraction': 0.8,
-    'bagging_freq': 5,
-    'bagging_seed': SEED,
-    'metric_freq': 500,
-    'early_stopping_round': 100,
-}
-
-# lg_fair = LightgbmWrapper(seed=SEED, params=lightgbm_params_fair)
-# lg_oof_train_fair, lg_oof_test_fair = get_oof(lg_fair)
-res_lg_fair = load_results_from_json('model_fair_c_2_w_100_lr_0.002_trees_20K.json')
+if True:
+    # lightgbm_params_fair = {
+    #     'exec_path': '../../../LightGBM/lightgbm',
+    #     'config': '',
+    #     'application': 'regression-fair',
+    #     'num_iterations': 20000,
+    #     'learning_rate': 0.002,
+    #     'num_leaves': 31,
+    #     'tree_learner': 'serial',
+    #     'num_threads': 4,
+    #     'min_data_in_leaf': 100,
+    #     'metric': 'l1',
+    #     'feature_fraction': 0.9,
+    #     'feature_fraction_seed': SEED,
+    #     'bagging_fraction': 0.8,
+    #     'bagging_freq': 5,
+    #     'bagging_seed': SEED,
+    #     'metric_freq': 500,
+    #     'early_stopping_round': 100,
+    # }
+    # lg_fair = LightgbmWrapper(seed=SEED, params=lightgbm_params_fair)
+    # lg_oof_train_fair, lg_oof_test_fair = get_oof(lg_fair)
+    # save_results_to_json('model_fair_c_2_w_100_lr_0.002_trees_20K', lightgbm_params_fair, lg_oof_test_fair, lg_oof_train_fair)
+    lightgbm_params_fair = {
+        'exec_path': '../../../LightGBM/lightgbm',
+        'config': '',
+        'application': 'regression-fair',
+        'fair_constant': 15.16,
+        'fair_scaling': 194.388,
+        'num_iterations': 50000,
+        'learning_rate': 0.00588,
+        'num_leaves': 107,
+        'tree_learner': 'serial',
+        'num_threads': 4,
+        'min_data_in_leaf': 2,
+        'metric': 'l1',
+        'feature_fraction': 0.6665121,
+        'feature_fraction_seed': SEED,
+        'bagging_fraction': 0.96029,
+        'bagging_freq': 3,
+        'bagging_seed': SEED,
+        'metric_freq': 100,
+        'early_stopping_round': 100,
+    }
+    lg_fair = LightgbmWrapper(seed=SEED, params=lightgbm_params_fair)
+    lg_oof_train_fair, lg_oof_test_fair = get_oof(lg_fair)
+    save_results_to_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K', lightgbm_params_fair, lg_oof_test_fair, lg_oof_train_fair)
+res_lg_fair = load_results_from_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K.json')
 print("LG_Fair-CV: {}".format(mean_absolute_error(y_train, res_lg_fair['oof_train'])))
 
 
-lightgbm_params_l2 = {
-    'exec_path': '../../../LightGBM/lightgbm',
-    'config': '',
-    'application': 'regression',
-    'num_iterations': 7000,
-    'learning_rate': 0.1,
-    'num_leaves': 31,
-    'tree_learner': 'serial',
-    'num_threads': 4,
-    'min_data_in_leaf': 100,
-    'metric': 'l1exp',
-    'feature_fraction': 0.9,
-    'feature_fraction_seed': SEED,
-    'bagging_fraction': 0.8,
-    'bagging_freq': 5,
-    'bagging_seed': SEED,
-    'metric_freq': 1,
-    'early_stopping_round': 100,
-    'verbose': True
-}
+if False:
+    # lightgbm_params_l2 = {
+    #     'exec_path': '../../../LightGBM/lightgbm',
+    #     'config': '',
+    #     'application': 'regression',
+    #     'num_iterations': 7000,
+    #     'learning_rate': 0.1,
+    #     'num_leaves': 31,
+    #     'tree_learner': 'serial',
+    #     'num_threads': 4,
+    #     'min_data_in_leaf': 100,
+    #     'metric': 'l1exp',
+    #     'feature_fraction': 0.9,
+    #     'feature_fraction_seed': SEED,
+    #     'bagging_fraction': 0.8,
+    #     'bagging_freq': 5,
+    #     'bagging_seed': SEED,
+    #     'metric_freq': 1,
+    #     'early_stopping_round': 100,
+    #     'verbose': True
+    # }
+    # lightgbm_params_l2 = {
+    #     'exec_path': '../../../LightGBM/lightgbm',
+    #     'config': '',
+    #     'application': 'regression',
+    #     'num_iterations': 20000,
+    #     'learning_rate': 0.01745188,
+    #     'num_leaves': 60,
+    #     'tree_learner': 'serial',
+    #     'num_threads': 4,
+    #     'min_data_in_leaf': 482,
+    #     'metric': 'l1exp',
+    #     'feature_fraction': 0.2800091,
+    #     # 'feature_fraction_seed': SEED,
+    #     'bagging_fraction': 0.96443795,
+    #     'bagging_freq': 3,
+    #     # 'bagging_seed': SEED,
+    #     'metric_freq': 1,
+    #     'early_stopping_round': 100,
+    #     'verbose': True
+    # }
+    lightgbm_params_l2 = {
+        'exec_path': '../../../LightGBM/lightgbm',
+        'config': '',
+        'application': 'regression',
+        'num_iterations': 2000,
+        'learning_rate': 0.0251188,
+        'num_leaves': 107,
+        'tree_learner': 'serial',
+        'num_threads': 4,
+        'min_data_in_leaf': 215,
+        'metric': 'l1exp',
+        'feature_fraction': 0.6665121,
+        # 'feature_fraction_seed': SEED,
+        'bagging_fraction': 0.9602939,
+        'bagging_freq': 3,
+        # 'bagging_seed': SEED,
+        'metric_freq': 10,
+        'early_stopping_round': 100,
+        'verbose': True
+    }
+    lg_l2 = LightgbmWrapper(seed=SEED, params=lightgbm_params_l2)
+    lg_oof_train_l2, lg_oof_test_l2 = get_oof(lg_l2)
+    # save_results_to_json('model_l2_bopt_run1_index75', lightgbm_params_l2, lg_oof_test_l2, lg_oof_train_l2)
+    # save_results_to_json('model_l2_bopt_run2_index92', lightgbm_params_l2, lg_oof_test_l2, lg_oof_train_l2)
+res_lg_l2_1 = load_results_from_json('model_l2_lr_0.01_trees_7K.json')
+res_lg_l2_2 = load_results_from_json('model_l2_bopt_run1_index75.json')
+res_lg_l2_3 = load_results_from_json('model_l2_bopt_run2_index92.json')
+# print("LG_L2-CV: {}".format(mean_absolute_error(y_train, res_lg_l2['oof_train'])))
+print("LG_L2 ({})-CV: {}".format(res_lg_l2_1['name'], mean_absolute_error(y_train, res_lg_l2_1['oof_train'])))
+print("LG_L2 ({})-CV: {}".format(res_lg_l2_2['name'], mean_absolute_error(y_train, res_lg_l2_2['oof_train'])))
+print("LG_L2 ({})-CV: {}".format(res_lg_l2_3['name'], mean_absolute_error(y_train, res_lg_l2_3['oof_train'])))
 
-lg_l2 = LightgbmWrapper(seed=SEED, params=lightgbm_params_l2)
-lg_oof_train_l2, lg_oof_test_l2 = get_oof(lg_l2)
-# res_lg_l2 = load_results_from_json('model_l2_lr_0.01_trees_7K.json')
-print("LG_L2-CV: {}".format(mean_absolute_error(y_train, res_lg_l2['oof_train'])))
-
-
-
-res_array = [res_lg_fair, res_lg_l2, res_et]
+res_array = [res_lg_fair,
+             res_et,
+             res_keras,
+             res_lg_l2_1,
+             res_lg_l2_2,
+             res_lg_l2_3,
+             res_xgb,
+             ]
 
 for i, r in enumerate(res_array):
     cv_err  = np.abs(y_train - r['oof_train'].flatten())
     cv_mean = np.mean(cv_err)
     cv_std  = np.std(cv_err)
-    print ("Model {0}: \tName = {1}, \tCV = {2}+{3}".format(i, r['name'], cv_mean, cv_std))
+    print ("Model {0}: \tCV = {2:.3f}+{3:.1f}, \tName = {1} ".format(i, r['name'], cv_mean, cv_std))
 
 x_train = np.concatenate([r['oof_train'] for r in res_array], axis=1)
 x_test  = np.concatenate([r['oof_test']  for r in res_array], axis=1)
@@ -295,8 +413,9 @@ cv_mean = res.iloc[-1, 0]
 cv_std = res.iloc[-1, 1]
 
 print('Ensemble-CV: {0}+{1}'.format(cv_mean, cv_std))
+print('Best Rounds: {}'.format(best_nrounds))
 
-gbdt = xgb.train(xgb_params, dtrain, best_nrounds)
+gbdt = xgb.train(xgb_params, dtrain, int(best_nrounds * (1)))
 
 submission = pd.read_csv(SUBMISSION_FILE)
 submission.iloc[:, 1] = gbdt.predict(dtest)

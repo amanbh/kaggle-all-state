@@ -70,15 +70,19 @@ def load_submission(DATA_DIR="../../input"):
     submission = pd.read_csv(SUBMISSION_FILE)
     return submission
 
-def split_and_save_folds(NFOLDS=5):
+def split_and_save_folds(NFOLDS=5, train_logloss=True, logloss_shift=1):
     (x_train, x_test, y_train, ntrain, ntest) = load_data()
     from sklearn.cross_validation import KFold
     kf = KFold(ntrain, n_folds=NFOLDS, shuffle=False, random_state=None)
     for i, (train_index, test_index) in enumerate(kf):
         x_tr = x_train[train_index]
-        y_tr = np.log1p(y_train[train_index])
         x_te = x_train[test_index]
-        y_te = np.log1p(y_train[test_index])
+        if train_logloss:
+            y_tr = np.log1p(y_train[train_index] + logloss_shift - 1)
+            y_te = np.log1p(y_train[test_index] + logloss_shift - 1)
+        else:
+            y_tr = y_train[train_index]
+            y_te = y_train[test_index]
         tr_fold = pd.DataFrame(np.concatenate((y_tr.reshape(-1,1), x_tr), axis = 1))
         cv_fold = pd.DataFrame(np.concatenate((y_te.reshape(-1,1), x_te), axis = 1))
         cv_test_fold = pd.DataFrame(x_te)

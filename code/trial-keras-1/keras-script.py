@@ -109,12 +109,12 @@ def nn_model():
 
 ## cv-folds
 nfolds = 5
-folds = KFold(len(y), n_folds = nfolds, shuffle = True, random_state = 111)
+folds = KFold(len(y), n_folds = nfolds, shuffle = False, random_state = None)
 
 ## train models
 i = 0
-nbags = 5
-nepochs = 25
+nbags = 4
+nepochs = 55
 pred_oob = np.zeros(xtrain.shape[0])
 pred_test = np.zeros(xtest.shape[0])
 
@@ -148,7 +148,4 @@ df.to_csv('preds_oob.csv', index = False)
 pred_test /= (nfolds*nbags)
 df = pd.DataFrame({'id': id_test, 'loss': pred_test})
 df.to_csv('submission_keras.csv', index = False)
-
-
-
 

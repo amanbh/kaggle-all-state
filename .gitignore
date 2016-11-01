@@ -1,3 +1,7 @@
+code/*/*.csv
+code/*/*.json
+code/*/*.zip
+code/*/data.pkl
 */*.swp
 */*/*.swp
 code/*/.ipynb_checkpoints
