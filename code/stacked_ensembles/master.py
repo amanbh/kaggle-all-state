@@ -4,6 +4,7 @@ from IPython.display import display
 import pickle
 import json
 import sys
+import time
 
 import xgboost as xgb
 from sklearn.ensemble import ExtraTreesRegressor
@@ -98,25 +99,55 @@ def split_and_save_folds(NFOLDS=5, train_logloss=True, logloss_shift=1):
         cv_test_fold.to_csv("cv_as_test_fold_{}.csv".format(i), index = None, header = False)
 
 
+def get_timestamp():
+    return time.strftime("%Y%m%dT%H%M%S")
+
+
 def generate_logshift_processors(shift=200):
     preprocessor = lambda y: np.log(y + shift)
     postprocessor = lambda p: np.exp(p) - shift
-    return preprocessor, postprocessor
+    name = 'log_shift_' + repr(shift)
+    return preprocessor, postprocessor, name
 
 
 ################### CLF Wrappers ########################
 
 class ClfWrapper(object):
     def __init__(self, params=None):
-        self.preprocess_labels = params.pop('preprocess_labels', lambda x : x)
-        self.postprocess_labels = params.pop('postprocess_labels', lambda x : x)
+        self.param = params.copy()
+        self.preprocess_labels = self.param.pop('preprocess_labels', lambda x : x)
+        self.postprocess_labels = self.param.pop('postprocess_labels', lambda x : x)
+        self.label_processor_function_name = self.param.pop('label_processor_function_name', 'identity')
+
+    def get_oof(self):
+        oof_train = np.zeros((ntrain,))
+        oof_test = np.zeros((ntest,))
+        oof_test_skf = np.empty((NFOLDS, ntest))
+    
+        for i, (train_index, test_index) in enumerate(kf):
+            x_tr = x_train[train_index]
+            y_tr = y_train[train_index]
+            x_te = x_train[test_index]
+            y_te = y_train[test_index]
+    
+            self.train(x_tr, y_tr, x_te, y_te)
+            oof_train[test_index] = self.predict(x_te)
+            oof_test_skf[i, :] = self.predict(x_test)
+    
+        oof_test[:] = oof_test_skf.mean(axis=0)
+        return oof_train.reshape(-1, 1), oof_test.reshape(-1, 1)
+    
+    
+    def get_oof_score(self):
+        oof_train, oof_test = get_oof(self)
+        return mean_absolute_error(y_train, oof_train)
 
 
 class SklearnWrapper(ClfWrapper):
     def __init__(self, clf, seed=0, params=None):
         ClfWrapper.__init__(self, params)
-        params['random_state'] = seed
-        self.clf = clf(**params)
+        self.param['random_state'] = seed
+        self.clf = clf(**self.param)
 
     def train(self, x_train, y_train, x_valid, y_valid):
         self.clf.fit(x_train, self.preprocess_labels(y_train))
@@ -127,18 +158,20 @@ class SklearnWrapper(ClfWrapper):
 
 class XgbWrapper(ClfWrapper):
     def __init__(self, seed=0, params=None):
-        super().__init__(self, params)
-        self.param = params
+        ClfWrapper.__init__(self, params)
         self.param['seed'] = seed
-        self.nrounds = params.pop('nrounds', 10000)
-        self.num_folds_trained = 1
+        self.nrounds = self.param.pop('nrounds', 10000)
+        # self.num_folds_trained = 1
+        self.verbose_eval = self.param.pop('verbose_eval', False)
+        self.early_stopping_rounds = self.param.pop('early_stopping_rounds', 100)
 
     def evalerror(self, preds, dtrain):
-        return 'mae', mean_absolute_error(self.postprocess_labels(preds),
+        return 'MAE', mean_absolute_error(self.postprocess_labels(preds),
                                           self.postprocess_labels(dtrain.get_label()))
 
     def train(self, x_train, y_train, x_valid, y_valid):
         dtrain = xgb.DMatrix(x_train, label=self.preprocess_labels(y_train))
+        dvalid = xgb.DMatrix(x_valid, label=self.preprocess_labels(y_valid))
         eval_error_func = lambda p,d : self.evalerror(p,d)
         # if self.num_folds_trained == 0:
         #     res = xgb.cv(self.param, dtrain, num_boost_round=self.nrounds, nfold=5, seed=SEED,
@@ -155,8 +188,12 @@ class XgbWrapper(ClfWrapper):
         # self.gbdt = xgb.train(self.param, dtrain, self.nrounds,
         #                       evals=[(dvalid, 'valid')], verbose_eval=10, feval=eval_error_func,
         #                       early_stopping_rounds=25)
-
-        self.gbdt = xgb.train(self.param, dtrain, self.nrounds)
+        print(self.param)
+        self.gbdt = xgb.train(self.param, dtrain, self.nrounds,
+                              early_stopping_rounds=self.early_stopping_rounds,
+                              evals=[(dvalid, 'Validation')], feval=eval_error_func,
+                              verbose_eval=self.verbose_eval
+                              )
 
     def predict(self, x):
         return self.postprocess_labels(self.gbdt.predict(xgb.DMatrix(x)))
@@ -164,22 +201,21 @@ class XgbWrapper(ClfWrapper):
 
 class LightgbmWrapper(ClfWrapper):
     def __init__(self, seed=0, params=None, pyLightGBM_managed=True):
-        super().__init__(self, params)
-        self.params = params
+        ClfWrapper.__init__(self, params)
         if pyLightGBM_managed:
-            self.clf = GBMRegressor(**params)
-        self.params['pyLightGBM_managed'] = pyLightGBM_managed
-        self.params['seed'] = seed
+            self.clf = GBMRegressor(**self.param)
+        self.param['pyLightGBM_managed'] = pyLightGBM_managed
+        self.param['seed'] = seed
 
     def train(self, x_train, y_train, x_valid, y_valid):
-        if self.params['pyLightGBM_managed']:
+        if self.param['pyLightGBM_managed']:
             self.clf.fit(x_train, self.preprocess_labels(y_train),
                          [(x_valid, self.preprocess_labels(y_valid))])
         else:
             print('Not ready for external LightGBM yet!')
 
     def predict(self, x):
-        if self.params['pyLightGBM_managed']:
+        if self.param['pyLightGBM_managed']:
             return self.postprocess_labels(self.clf.predict(x))
         else:
             print('Not ready for external LightGBM yet!')
@@ -193,34 +229,18 @@ def get_fold(ntrain, NFOLDS=5, seed=0):
     return kf
 
 
-def get_oof(clf):
-    oof_train = np.zeros((ntrain,))
-    oof_test = np.zeros((ntest,))
-    oof_test_skf = np.empty((NFOLDS, ntest))
-
-    for i, (train_index, test_index) in enumerate(kf):
-        x_tr = x_train[train_index]
-        y_tr = y_train[train_index]
-        x_te = x_train[test_index]
-        y_te = y_train[test_index]
-
-        clf.train(x_tr, y_tr, x_te, y_te)
-        oof_train[test_index] = clf.predict(x_te)
-        oof_test_skf[i, :] = clf.predict(x_test)
-
-    oof_test[:] = oof_test_skf.mean(axis=0)
-    return oof_train.reshape(-1, 1), oof_test.reshape(-1, 1)
-
-
-def get_oof_score(clf):
-    oof_train, oof_test = get_oof(clf)
-    return mean_absolute_error(y_train, oof_train)
 
 
 def save_results_to_json(name, params, oof_test, oof_train):
+    # Remove functions which cannot be saved as JSON
+    local_params = params.copy()
+    keys = list(local_params.keys())
+    for k in keys:
+        if callable(local_params[k]):
+            local_params.pop(k)
     with open(name + '.json', 'w') as outfile:
         json.dump({ 'name': name,
-                    'params': params,
+                    'params': local_params,
                     'oof_train': oof_train.tolist(),
                     'oof_test': oof_test.tolist() },
                   outfile,
@@ -273,7 +293,7 @@ def train_skl_model(model_key=None, clf=None, params=None):
             print('No known clf passed to train_skl_model and params are also missing!')
             return
     skl = SklearnWrapper(clf=clf, params=params)
-    oof_train, oof_test = get_oof(skl)
+    oof_train, oof_test = skl.get_oof()
     save_results_to_json(model_key, params, oof_test, oof_train)
     res_skl = load_results_from_json(model_key + '.json')
     print("{} CV: {}".format(
@@ -287,6 +307,7 @@ def train_xgb_model(model_key='model_xgb', xgb_params=None):
     Saves results dict for XGB
     """
     if xgb_params is None:
+        print('No params passed to train_xgb_model')
         xgb_params = {
             'seed': 0,
             'colsample_bytree': 0.5,
@@ -306,7 +327,7 @@ def train_xgb_model(model_key='model_xgb', xgb_params=None):
             # 'objective': 'reg:linear',
         }
     xg = XgbWrapper(params=xgb_params)
-    xgb_oof_train, xgb_oof_test = get_oof(xg)
+    xgb_oof_train, xgb_oof_test = xg.get_oof()
     # save_results_to_json('model_xgb_1', xgb_params, xgb_oof_test, xgb_oof_train)
     # save_results_to_json('model_xgb_2', xgb_params, xgb_oof_test, xgb_oof_train)
     # save_results_to_json('model_xgb_3', xgb_params, xgb_oof_test, xgb_oof_train) # Fix incorrect sign of shift term in predictions from model_2
@@ -342,7 +363,7 @@ def train_lgbm_model(model_key='model_lgbm', lgbm_params=None):
             'early_stopping_round': 100,
         }
     lg = LightgbmWrapper(params=lgbm_params)
-    oof_train, oof_test = get_oof(lg)
+    oof_train, oof_test = lg.get_oof()
     save_results_to_json(model_key, lgbm_params, oof_test, oof_train)
     res_lg = load_results_from_json(model_key + '.json')
     print("LG {} CV: {}".format(
@@ -356,36 +377,54 @@ def train_lgbm_model(model_key='model_lgbm', lgbm_params=None):
 def load_model_results(model_key=None):
     """ Return results dict for model corresponding to model_key """
     res_dict = {'keras_1':
-                    load_results_from_csv(
-                      'keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv',
-                      'keras_1/submission_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv'
+                    lambda : load_results_from_csv(
+                                'keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv',
+                                'keras_1/submission_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv'
                     ),
                  'model_et':
-                    load_results_from_json(
+                    lambda: load_results_from_json(
                       'model_et.json'
                     ),
                  'model_rf':
-                    load_results_from_json(
+                    lambda : load_results_from_json(
                       'model_rf.json'
                     ),
-                }[model_key]
+                }
+    res_func = res_dict.get(model_key, lambda : load_results_from_json(model_key+'.json'))
+    res = res_func()
     print("{} CV: {}".format(
-                        res_dict['name'],
-                        mean_absolute_error(y_train, res_dict['oof_train']))
+                        res['name'],
+                        mean_absolute_error(y_train, res['oof_train']))
                         )
-    return res_dict
+    return res
 
 
 
-def load_all_model_results():
-    model_keys = ['lg_fair',
-                  'keras_1',
-                  'model_et',
-                  'model_rf',
-                  'lg_l2_1',
-                  'lg_l2_2',
-                  'lg_l2_3',
-                  'res_xgb']
+def load_all_model_results(model_keys=None):
+    """
+    Returns a list of result dicts
+    by calling load_model_results on all given model_keys.
+
+    Parameters
+    ----------
+    model_key : list
+        A list of strings corresponding to the model_key
+    
+    Returns
+    -------
+    res_array : list of dicts
+        A list of dict objects.
+        Each object contains results correspoding to model_key. 
+    """
+    if model_keys is None:
+        model_keys = ['lg_fair',
+                      'keras_1',
+                      'model_et',
+                      'model_rf',
+                      'lg_l2_1',
+                      'lg_l2_2',
+                      'lg_l2_3',
+                      'res_xgb']
     res_array = [ load_model_results(model_key) for model_key in model_keys ]
 
 
@@ -439,17 +478,50 @@ def train_level1_xgb_model(res_array):
 # if __name__ == "__main__":
 
 (x_train, x_test, y_train, ntrain, ntest) = load_data()
-NFOLDS = 5
+NFOLDS = 10
 kf = get_fold(ntrain, NFOLDS)
-preprocessor, postprocessor = generate_logshift_processors(shift=200)
-params = {
-          'max_depth': 6,
-          'max_features': 0.2,
-          'min_samples_leaf': 2,
-          'n_estimators': 4,
-          'n_jobs': 4,
-          'verbose': 1,
-          'preprocess_labels': preprocessor,
-          'postprocess_labels': postprocessor,
-         }
-train_skl_model(model_key='test_skl_rf', clf=RandomForestRegressor, params=params)
+preprocessor, postprocessor, prep_name = generate_logshift_processors(shift=200)
+# params = {
+#           'max_depth': 6,
+#           'max_features': 0.2,
+#           'min_samples_leaf': 2,
+#           'n_estimators': 4,
+#           'n_jobs': 4,
+#           'verbose': 1,
+#           'preprocess_labels': preprocessor,
+#           'postprocess_labels': postprocessor,
+#          }
+# train_skl_model(model_key='test_skl_rf', clf=RandomForestRegressor, params=params)
+
+xgb_params = {
+    'alpha': 1,
+    'base_score': 1,
+    'colsample_bytree': 0.5,
+    'gamma': 1,
+    'learning_rate': 0.01,
+    'max_depth': 12,
+    'min_child_weight': 1,
+    'num_parallel_tree': 1,
+    'seed': 0,
+    'silent': 1,
+    'subsample': 0.8,
+    # 'verbose': 1,
+    # 'eval_metric': 'mae',
+    # 'objective': 'reg:linear',
+    'nrounds': 2300,
+    'verbose_eval': 10,
+    'early_stopping_rounds': 100,
+    'preprocess_labels': preprocessor,
+    'postprocess_labels': postprocessor,
+    'label_processor_function_name': prep_name, 
+}
+if True:
+    model_key = 'xgb_Vladimir_base_score_1-' + get_timestamp()
+    train_xgb_model(model_key=model_key, xgb_params=xgb_params)
+else:
+    model_key = 'test_xgb_A1-20161103T205502'
+
+res_xgb = load_model_results(model_key=model_key)
+sub = load_submission()
+sub['loss'] = res_xgb['oof_test']
+sub.to_csv('submission-' + get_timestamp() + '.csv', index=False)
