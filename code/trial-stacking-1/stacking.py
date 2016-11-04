@@ -10,6 +10,8 @@ from sklearn.ensemble import ExtraTreesRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error
 from pylightgbm.models import GBMRegressor
+from sklearn.grid_search import GridSearchCV
+from bayes_opt import BayesianOptimization
 from IPython.display import display
 import json
 import pickle
@@ -245,7 +247,7 @@ print("XG-CV: {}".format(mean_absolute_error(y_train, res_xgb['oof_train'])))
 
 
 
-if True:
+if False:
     # lightgbm_params_fair = {
     #     'exec_path': '../../../LightGBM/lightgbm',
     #     'config': '',
@@ -292,7 +294,8 @@ if True:
     lg_fair = LightgbmWrapper(seed=SEED, params=lightgbm_params_fair)
     lg_oof_train_fair, lg_oof_test_fair = get_oof(lg_fair)
     save_results_to_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K', lightgbm_params_fair, lg_oof_test_fair, lg_oof_train_fair)
-res_lg_fair = load_results_from_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K.json')
+# res_lg_fair = load_results_from_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K.json')
+res_lg_fair = load_results_from_json('model_fair_c_2_w_100_lr_0.002_trees_20K.json')
 print("LG_Fair-CV: {}".format(mean_absolute_error(y_train, res_lg_fair['oof_train'])))
 
 
@@ -369,14 +372,16 @@ print("LG_L2 ({})-CV: {}".format(res_lg_l2_1['name'], mean_absolute_error(y_trai
 print("LG_L2 ({})-CV: {}".format(res_lg_l2_2['name'], mean_absolute_error(y_train, res_lg_l2_2['oof_train'])))
 print("LG_L2 ({})-CV: {}".format(res_lg_l2_3['name'], mean_absolute_error(y_train, res_lg_l2_3['oof_train'])))
 
+res_xgb_vlad_bs1_fast = load_results_from_json('../stacked_ensembles/test_xgb_A1-20161103T205502.json')
 res_array = [res_lg_fair,
-             res_et,
+             # res_et,
              res_keras,
              res_lg_l2_1,
              res_lg_l2_2,
              res_lg_l2_3,
              res_xgb,
-             ]
+             res_xgb_vlad_bs1_fast,
+            ]
 
 for i, r in enumerate(res_array):
     cv_err  = np.abs(y_train - r['oof_train'].flatten())
@@ -385,7 +390,7 @@ for i, r in enumerate(res_array):
     print ("Model {0}: \tCV = {2:.3f}+{3:.1f}, \tName = {1} ".format(i, r['name'], cv_mean, cv_std))
 
 x_train = np.concatenate([r['oof_train'] for r in res_array], axis=1)
-x_test  = np.concatenate([r['oof_test']  for r in res_array], axis=1)
+x_test  = np.concatenate([r['oof_test' ] for r in res_array], axis=1)
 
 print("{},{}".format(x_train.shape, x_test.shape))
 
@@ -397,26 +402,26 @@ xgb_params = {
     'colsample_bytree': 0.8,
     'silent': 1,
     'subsample': 0.6,
-    'learning_rate': 0.01,
+    'learning_rate': 0.003,
     'objective': 'reg:linear',
-    'max_depth': 4,
+    'max_depth': 6,
     'num_parallel_tree': 1,
     'min_child_weight': 1,
     'eval_metric': 'mae',
 }
 
-res = xgb.cv(xgb_params, dtrain, num_boost_round=500, nfold=NFOLDS, seed=SEED,
+res = xgb.cv(xgb_params, dtrain, num_boost_round=5000, nfold=NFOLDS, seed=SEED,
              stratified=False, early_stopping_rounds=25, verbose_eval=10, show_stdv=True)
 
 best_nrounds = res.shape[0] - 1
 cv_mean = res.iloc[-1, 0]
 cv_std = res.iloc[-1, 1]
 
-print('Ensemble-CV: {0}+{1}'.format(cv_mean, cv_std))
+print('Ensemble-CV: {0:.3f}+{1:.1f}'.format(cv_mean, cv_std))
 print('Best Rounds: {}'.format(best_nrounds))
 
 gbdt = xgb.train(xgb_params, dtrain, int(best_nrounds * (1)))
 
 submission = pd.read_csv(SUBMISSION_FILE)
 submission.iloc[:, 1] = gbdt.predict(dtest)
-submission.to_csv('xgstacker_starter.sub.csv', index=None)
+submission.to_csv('xgstacker.sub.csv', index=None)
