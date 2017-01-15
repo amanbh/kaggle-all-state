@@ -1,0 +1,668 @@
+# model_fair_c_2_w_100_lr_0.002_trees_20K
+CV = 1145.92
+LB = 1126.17
+LightGBM with Fair objective on loss: 
+    fair-constant = 2 and fair-scaling = 100 (LightGBM could not deal with small values of Hessian)
+"params": {
+    "bagging_fraction": 0.8,
+    "bagging_seed": 0,
+    "num_iterations": 20000,
+    "num_leaves": 31,
+    "application": "regression-fair",
+    "min_data_in_leaf": 100,
+    "learning_rate": 0.002,
+    "num_threads": 4,
+    "metric": "l1",
+    "early_stopping_round": 100,
+    "exec_path": "../../../LightGBM/lightgbm",
+    "bagging_freq": 5,
+    "metric_freq": 500,
+    "seed": 0,
+    "config": "",
+    "feature_fraction_seed": 0,
+    "feature_fraction": 0.9,
+    "tree_learner": "serial"
+},
+NFOLDS = 5
+
+# model_l2_lr_0.01_trees_7K
+CV = 1138.99
+LB = 1118.89
+LightGBM with L2 on log-loss: 
+"params": {
+    "bagging_fraction": 0.8,
+    "bagging_seed": 0,
+    "num_iterations": 7000,
+    "num_leaves": 31,
+    "application": "regression",
+    "min_data_in_leaf": 100,
+    "learning_rate": 0.01,
+    "num_threads": 4,
+    "metric": "l1exp",
+    "early_stopping_round": 100,
+    "exec_path": "../../../LightGBM/lightgbm",
+    "bagging_freq": 5,
+    "metric_freq": 500,
+    "seed": 0,
+    "config": "",
+    "feature_fraction_seed": 0,
+    "feature_fraction": 0.9,
+    "tree_learner": "serial"
+}
+NFOLDS = 5
+
+
+----
+
+# Fifth Stacking (with XGB)
+LB = 1114.27
+CV = 1131.16
+
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 2:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 3:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 4:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 5:        CV = 1194.327+1463.7,   Name = model_xgb_2 (Incorrect sign of shift in postprocess_labels)
+
+Level 1: XGB (default stacking)
+Ensemble-CV: 1131.163+6.8 with 5 folds and 238 rounds
+Final Submission with 238 rounds
+
+----
+
+# test_xgb_A1-20161103T205502.json
+LB = 1115.1
+CV = 1146.40
+Vladimir XGB-1114 params + base_score=1 + higher eta
+xgb_params = {
+ 'alpha': 1,
+ 'base_score': 1,
+ 'colsample_bytree': 0.5,
+ 'early_stopping_rounds': 50,
+ 'gamma': 1,
+ 'label_processor_function_name': 'log_shift_200',
+ 'learning_rate': 0.1,
+ 'max_depth': 12,
+ 'min_child_weight': 1,
+ 'nrounds': 500,
+ 'num_parallel_tree': 1,
+ 'seed': 0,
+ 'silent': 1,
+ 'subsample': 0.8,
+ 'verbose_eval': 10
+ }
+
+----
+
+# Sixth Stacking (with XGB)
+LB = 1113.49
+CV = 1130.97
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 2:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 3:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 4:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 5:        CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 6:        CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502)
+
+Level 1: XGB 
+(default stacking)                      Ensemble-CV: 1131.226+7.1 with 5 folds and 239 rounds
+(default + max_depth increased to 6)    Ensemble-CV: 1131.008+6.8 with 5 folds and 238 rounds
+(default + max_depth = 6, log(200+f))   Ensemble-CV: 1131.027+6.8 with 5 folds and 238 rounds
+(default + max_depth = 6, eta = 0.003)  Ensemble-CV: 1130.972+6.8 with 5 folds and 803 rounds **This version is submitted**
+Final Submission with 803 rounds
+
+# xgb_Vladimir_base_score_1-20161103T230621
+LB = 1113.16
+CV = 1133.08
+Vladimir XGB-1114 params + base_score=1
+NFOLDS = 10
+        {'alpha': 1,
+         'base_score': 1,
+         'colsample_bytree': 0.5,
+         'early_stopping_rounds': 100,
+         'gamma': 1,
+         'label_processor_function_name': 'log_shift_200',
+         'learning_rate': 0.01,
+         'max_depth': 12,
+         'min_child_weight': 1,
+         'nrounds': 2300,
+         'num_parallel_tree': 1,
+         'seed': 0,
+         'silent': 1,
+         'subsample': 0.8,
+         'verbose_eval': 10
+        }
+
+
+# Seventh Stacking (with XGB)
+LB = 1112.94
+CV = 1130.13
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 2:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 3:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 4:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 5:        CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 6:        CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502
+Model 7:        CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+
+Level 1 XGB (default + max_depth = 6, eta = 0.003)
+    Ensemble-CV: 1130.132+7.0 with 5 folds and 801 rounds **This version is submitted**
+
+
+# keras_2
+Batch normalization; 3 hidden layers; EarlyStopping (patience 5)
+CV = 1133.94
+LB = 1114.67
+
+    model = Sequential()
+    model.add(Dense(400, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.4))
+    
+    model.add(Dense(200, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    
+    model.add(Dense(50, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adadelta')
+    return(model)
+NFOLDS = 5
+nbags = 5
+
+# Eight Stacking (with XGB)
+CV = 1128.42
+LB = 1111.25
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 2:        CV = 1133.942+1554.8,   Name = keras_2/oof_train.csv    **KERAS with Batch Norm**
+Model 3:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 4:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 5:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 6:        CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 7:        CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502
+Model 8:        CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+
+Level 1 XGB
+(default + max_depth = 6, eta = 0.01, gamma = 1)                        Ensemble-CV: 1128.420+7.2 with 5 folds and 239 rounds
+(default + max_depth = 6, eta = 0.01, gamma = 1, colsample=0.99)        Ensemble-CV: 1128.432+7.2 with 5 folds and 239 rounds
+(default + max_depth = 6, eta = 0.003, gamma = 1)                       Ensemble-CV: 1128.222+7.1 with 5 folds and 804 rounds **This version is submitted**
+
+# keras_3
+Batch Normalization **after non-linear layer**; 3 hidden layers; Early Stopping (patience 5)
+CV = 1135.62
+LB = 1116.48
+    model = Sequential()
+    model.add(Dense(400, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(PReLU())
+    model.add(BatchNormalization())
+    model.add(Dropout(0.4))
+    model.add(Dense(200, init = 'he_normal'))
+    model.add(PReLU())
+    model.add(BatchNormalization())
+    model.add(Dropout(0.2))
+    model.add(Dense(50, init = 'he_normal'))
+    model.add(PReLU())
+    model.add(BatchNormalization())
+    model.add(Dropout(0.2))
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adadelta')
+    return(model)
+
+
+# Ninth Stacking (with XGB)
+CV = 1127.88
+LB = 1110.74
+
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 2:        CV = 1133.942+1554.8,   Name = keras_2/oof_train.csv
+Model 3:        CV = 1135.619+1564.4,   Name = **keras_3/oof_train.csv - Keras with BN layer moved to after non-linear layer**
+Model 4:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 5:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 6:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 7:        CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 8:        CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502
+Model 9:        CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+
+Level 1 XGB
+{'colsample_bytree': 0.8,
+ 'eval_metric': 'mae',
+ 'gamma': 1,
+ 'learning_rate': 0.01,
+ 'max_depth': 6,
+ 'min_child_weight': 1,
+ 'num_parallel_tree': 1,
+ 'objective': 'reg:linear',
+ 'seed': 0,
+ 'subsample': 0.6}
+(default + max_depth = 6, eta = 0.01, gamma = 1)                        Ensemble-CV: 1127.957+7.0 with 5 folds and 238 rounds
+(default + max_depth = 6, eta = 0.003, gamma = 1)                       Ensemble-CV: 1127.884+7.0 with 5 folds and 803 rounds **This version is submitted**
+
+
+# xgb-1117-attempt1-20161107T234751
+CV = 1142.35
+LB = 1115.81
+
+NFOLDS = 5
+
+{'alpha': 1,
+ 'base_score': 1,
+ 'colsample_bytree': 0.3085,
+ 'early_stopping_rounds': 25,
+ 'gamma': 0.529,
+ 'label_processor_function_name': 'log_shift_200',
+ 'learning_rate': 0.1,
+ 'max_depth': 7,
+ 'min_child_weight': 4.2922,
+ 'nrounds': 2300,
+ 'num_parallel_tree': 1,
+ 'seed': 0,
+ 'subsample': 0.993,
+ 'verbose_eval': 10}
+
+**(above params)**                      CV = 1142.35
+(-alpha,-base_score)                    CV = 1144.97
+(eta=0.3)                               CV = 1159.31
+(preprocess_conts)                      CV = 1142.92
+(org preprocessing and script)          CV = 1145.32
+
+# Tenth Stacking (with XGB)
+CV = 1127.76
+LB = 1110.62
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 2:        CV = 1133.942+1554.8,   Name = keras_2/oof_train.csv
+Model 3:        CV = 1135.619+1564.4,   Name = keras_3/oof_train.csv
+Model 4:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 5:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 6:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 7:        CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 8:        CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502
+Model 9:        CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+Model 10:       CV = 1142.349+1552.5,   Name = **xgb-1117-attempt1-20161107T234751**
+
+Level 1 XGB
+{'colsample_bytree': 0.8,
+ 'eval_metric': 'mae',
+ 'gamma': 1,
+ 'learning_rate': 0.003,
+ 'max_depth': 6,
+ 'min_child_weight': 1,
+ 'num_parallel_tree': 1,
+ 'objective': 'reg:linear',
+ 'seed': 0,
+ 'subsample': 0.6}
+(default + max_depth = 6, eta = 0.003, gamma = 1)                       Ensemble-CV: 1127.755+6.9 with 5 folds and 806 rounds **This version is submitted**
+
+
+# Stacking with model_et    **not-submitted**
+Add model_et to Tenth Stacking
+Gives CV = 1127.711+7.2 after 805 rounds
+
+
+# keras_A4
+CV = 1140.48
+not submitted to LB
+
+keras_3 + **batch size = 32**
+    model = Sequential()
+    model.add(Dense(400, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(PReLU())
+    model.add(BatchNormalization())
+    model.add(Dropout(0.4))
+    model.add(Dense(200, init = 'he_normal'))
+    model.add(PReLU())
+    model.add(BatchNormalization())
+    model.add(Dropout(0.2))
+    model.add(Dense(50, init = 'he_normal'))
+    model.add(PReLU())
+    model.add(BatchNormalization())
+    model.add(Dropout(0.2))
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adadelta')
+
+
+# Stacking with keras_A4 & skl_rf-20161108T012715 **not submitted**
+CV = 1127.70
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1269.171+1569.8,   Name = model_et
+Model 2:        CV = 1223.941+1693.0,   Name = skl_rf-20161108T012715
+Model 3:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 4:        CV = 1133.942+1554.8,   Name = keras_2/oof_train.csv
+Model 5:        CV = 1135.619+1564.4,   Name = keras_3/oof_train.csv
+Model 6:        CV = 1140.481+1563.9,   Name = keras_A4/oof_train.csv
+Model 7:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 8:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 9:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 10:       CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 11:       CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502 
+Model 12:       CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+Model 13:       CV = 1142.349+1552.5,   Name = xgb-1117-attempt1-20161107T234751
+
+Level 1 (XGB)
+{'colsample_bytree': 0.8,
+ 'eval_metric': 'mae',
+ 'gamma': 1,
+ 'learning_rate': 0.003,
+ 'max_depth': 6,
+ 'min_child_weight': 1,
+ 'num_parallel_tree': 1,
+ 'objective': 'reg:linear',
+ 'seed': 0,
+ 'silent': 1,
+ 'subsample': 0.6}
+(default + max_depth = 6, eta = 0.003, gamma = 1)
+(above params)                                    Ensemble-CV: 1127.700+7.1 Best Rounds: 807
+(above params, NFOLDS = 10)                       Ensemble-CV: 1127.563+9.1 Best Rounds: 810
+
+
+# AM_1 
+**Mean of keras_2 and xgb_Vladimir_base_score_1-20161103T230621**
+CV = 1124.74
+LB = 1106.82
+
+xgb_Vladimir_base_score_1-20161103T230621
+CV = 1133.08
+LB = 1113.16
+
+keras_2
+CV = 1133.94
+LB = 1114.67
+
+
+Arithematic Mean:   CV = 1124.736 **submitted**
+Geometric Mean:     CV = 1125.02
+Harmonic Mean:      CV = 1749.954
+
+
+# keras_A5_1
+CV = 1138.632
+LB = 1119.769
+**keras_2 + adam instead of adadelta**
+def nn_model():
+    model = Sequential()
+    model.add(Dense(400, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.4))
+    model.add(Dense(200, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(50, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adam')
+    return(model)
+
+callbacks = [
+    EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto'),
+]
+
+nfolds = 5
+nbags = 5
+batch size = 128
+Avg. epochs ~ 17 but patience should have been lower to avoid overfitting.
+Time ~ 3h5m (down form 8h due to fewer avg epochs)
+
+
+# keras_A5_2
+CV = 1136.687
+LB = 1119.54
+**keras_A5_1 + EarlyStoppingPatience = 2**
+def nn_model():
+    model = Sequential()
+    model.add(Dense(400, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.4))
+    model.add(Dense(200, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(50, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adam')
+    return(model)
+
+callbacks = [
+    EarlyStopping(monitor='val_loss', **patience=2**, verbose=0, mode='auto'),
+]
+nfolds = 5
+nbags = 5
+batch size = 128
+Time ~ 2h25m (24% faster convergence than keras_A5_1)
+
+# lgbm_l2_loglossshift_extremin_1112-20161110T023325
+CV = 1135.93
+LB = 1115.50
+
+        lgbm_params = {
+        'exec_path': '../../../LightGBM/lightgbm',
+        'config': '',
+        'application': 'regression',
+        'num_iterations': 2400,
+        'learning_rate': 0.01,
+        'num_leaves': 200,
+        'tree_learner': 'serial',
+        'num_threads': 1,
+        'min_data_in_leaf': 8,
+        'metric': 'l1exp',
+        'feature_fraction': 0.3,
+        'feature_fraction_seed': SEED,
+        'bagging_fraction': 0.8,
+        'bagging_freq': 100,
+        'bagging_seed': SEED,
+        'metric_freq': 50,
+        'early_stopping_round': 100,
+        'preprocess_labels': preprocessor,
+        'postprocess_labels': postprocessor,
+        'label_processor_function_name': log_shift_200,
+        }
+NFOLDS = 5
+
+
+# lgbm_l2_loglossshift_extremin_1112-lr_0.003-20161110T031110
+CV = 1132.89
+LB = 1113.76
+lgbm_params = {
+    'exec_path': '../../../LightGBM/lightgbm',
+    'config': '',
+    'application': 'regression',
+    'num_iterations': **24000**,
+    'learning_rate': **0.003**,
+    'num_leaves': 200,
+    'tree_learner': 'serial',
+    'num_threads': 1,
+    'min_data_in_leaf': 8,
+    'metric': 'l1exp',
+    'feature_fraction': 0.3,
+    'feature_fraction_seed': SEED,
+    'bagging_fraction': 0.8,
+    'bagging_freq': 100,
+    'bagging_seed': SEED,
+    'metric_freq': 50,
+    'early_stopping_round': **300**,
+    'preprocess_labels': preprocessor,
+    'postprocess_labels': postprocessor,
+    'label_processor_function_name': log_shift_200,
+    }
+**NFOLDS = 10**
+
+
+# keras_A5_11
+
+CV = 1136.11
+LB = 1118.65
+
+**keras_A5_1 with NFOLDS = 10**
+def nn_model():
+    model = Sequential()
+    model.add(Dense(400, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.4))
+    model.add(Dense(200, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(50, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adam')
+    return(model)
+
+callbacks = [
+    EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto'),
+]
+
+nfolds = 10
+nbags = 5
+batch size = 128
+Avg. epochs ~ 17
+Time ~ 7h
+
+
+# keras_A6_1
+
+**Add x -> x^2 neuron as last hidden layer**
+NFOLDS = 5
+...
+
+
+# keras_A6_2
+
+**Add x -> x^3 neuron as last hidden layer**
+Lower epochs to 5, Increased nbags to 40
+NFOLDS = 5
+patience = 5
+adam
+
+
+# keras_A7_1
+
+CV = 1138.80
+
+**keras_2 + Increased dropout**
+0.5, 0.4, 0.3
+nbags = 5
+patience = 5
+epochs = 200
+
+
+# keras_A8_1
+**2 hidden layer NN**
+CV = 1140.44
+def nn_model():
+    model = Sequential()
+    model.add(Dense(200, input_dim = xtrain.shape[1], init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.3))
+    model.add(Dense(100, init = 'he_normal'))
+    model.add(BatchNormalization())
+    model.add(PReLU())
+    model.add(Dropout(0.2))
+    model.add(Dense(1, init = 'he_normal'))
+    model.compile(loss = 'mae', optimizer = 'adam')
+    return(model)
+
+callbacks = [
+    EarlyStopping(monitor='val_loss', patience=5, verbose=0, mode='auto'),
+]
+
+nfolds = 5
+nbags = 5
+epochs = 200
+batch size = 256
+Avg epochs ~ 22
+Time ~ 1h40m
+
+----
+
+# Checkpoint:
+
+24 models trained.
+
+Model 0:        CV = 1145.929+1581.4,   Name = model_fair_c_2_w_100_lr_0.002_trees_20K
+Model 1:        CV = 1269.171+1569.8,   Name = model_et
+Model 2:        CV = 1223.941+1693.0,   Name = skl_rf-20161108T012715
+Model 3:        CV = 1138.184+1546.8,   Name = keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv
+Model 4:        CV = 1133.942+1554.8,   Name = keras_2/oof_train.csv
+Model 5:        CV = 1135.619+1564.4,   Name = keras_3/oof_train.csv
+Model 6:        CV = 1140.481+1563.9,   Name = keras_A4/oof_train.csv
+Model 7:        CV = 1138.992+1560.6,   Name = model_l2_lr_0.01_trees_7K
+Model 8:        CV = 1136.702+1569.7,   Name = model_l2_bopt_run1_index75
+Model 9:        CV = 1136.977+1566.1,   Name = model_l2_bopt_run2_index92
+Model 10:       CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 11:       CV = 1146.402+1565.6,   Name = test_xgb_A1-20161103T205502
+Model 12:       CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+Model 13:       CV = 1142.349+1552.5,   Name = xgb-1117-attempt1-20161107T234751
+Model 14:       CV = 1124.736+1538.2,   Name = mean_keras_2_xgb_Vladimir_base_score_1-20161103T230621
+Model 15:       CV = 1138.632+1564.7,   Name = ./keras_A5_1/oof_train.csv
+Model 16:       CV = 1136.688+1567.8,   Name = ./keras_A5_2/oof_train.csv
+Model 17:       CV = 1136.114+1558.9,   Name = ./keras_A5_11/oof_train.csv
+Model 18:       CV = 1135.930+1563.4,   Name = lgbm_l2_loglossshift_extremin_1112-20161110T023325
+Model 19:       CV = 1132.891+1557.3,   Name = lgbm_l2_loglossshift_extremin_1112-lr_0.003-20161110T031110
+Model 20:       CV = 1146.014+1587.9,   Name = ./keras_A6_1/oof_train.csv
+Model 21:       CV = 1146.831+1598.9,   Name = ./keras_A6_2/oof_train.csv
+Model 22:       CV = 1138.803+1570.2,   Name = ./keras_A7_1/oof_train.csv
+Model 23:       CV = 1140.436+1550.8,   Name = ./keras_A8_1/oof_train.csv
+
+Top 5 Models (in terms of CV):
+Model 14:       CV = 1124.736+1538.2,   Name = mean_keras_2_xgb_Vladimir_base_score_1-20161103T230621
+Model 19:       CV = 1132.891+1557.3,   Name = lgbm_l2_loglossshift_extremin_1112-lr_0.003-20161110T031110
+Model 12:       CV = 1133.082+1546.8,   Name = xgb_Vladimir_base_score_1-20161103T230621
+Model 4:        CV = 1133.942+1554.8,   Name = keras_2/oof_train.csv
+Model 10:       CV = 1135.422+1549.2,   Name = model_xgb_3
+Model 5:        CV = 1135.619+1564.4,   Name = keras_3/oof_train.csv
+Model 18:       CV = 1135.930+1563.4,   Name = lgbm_l2_loglossshift_extremin_1112-20161110T023325
+
+
+
+
+----
+
+# lgbm_l2_loglossshift500_extremin_1112-lr_0.01-20161113T203540.json
+CV = 1133.81
+
+**label_processor = log-shift-500**
+NFOLDS = 10
+        {'application': 'regression',
+         'bagging_fraction': 0.8,
+         'bagging_freq': 100,
+         'bagging_seed': 500,
+         'config': '',
+         'early_stopping_round': 300,
+         'exec_path': '../../../LightGBM/lightgbm',
+         'feature_fraction': 0.3,
+         'feature_fraction_seed': 500,
+         'label_processor_function_name': 'log_shift_500',
+         'learning_rate': 0.01,
+         'metric': 'l1exp',
+         'metric_freq': 50,
+         'min_data_in_leaf': 8,
+         'num_iterations': 24000,
+         'num_leaves': 200,
+         'num_threads': 1,
+         'tree_learner': 'serial'}
+
+
+

@@ -129,18 +129,19 @@ def et_bo_oof_score(n_estimators, max_features, max_depth, min_samples_leaf):
     return -1.0 * get_oof_score(et)
 
 
-if False:
-    etBO = BayesianOptimization(et_bo_oof_score, {'n_estimators': (10, 200),
+if True:
+    etBO = BayesianOptimization(et_bo_oof_score, {'n_estimators': (100, 100),
                                                   'max_features': (0.1, 0.999),
                                                   'max_depth':    (3, 12),
                                                   'min_samples_leaf': (2, 25) })
 
-    etBO.explore({'n_estimators': [2, 100],
+    etBO.explore({'n_estimators': [100, 100],
                   'max_features': [0.9, 0.6],
                   'max_depth': [5, 12],
                   'min_samples_leaf': [2, 2]})
 
-    etBO.maximize()
+    etBO.maximize(n_iter=100, kappa=5)
+    print(etBO.res['max'])
 
 
 # Bayesian Opt for LightGBM hyper params
@@ -236,11 +237,11 @@ if False:
         rfrBO.maximize(n_iter = n_iter, kappa = kappa)
         print('-'*53)
         print('RFR: %f' % rfrBO.res['max']['max_val'])
-        print(rfrBO.res['max']['param'])
+        print(rfrBO.res['max']['max_params'])
 
     print('Final Results')
     print('RFR: %f' % rfrBO.res['max']['max_val'])
-    print(rfrBO.res['max']['param'])
+    print(rfrBO.res['max']['max_params'])
 
 # Bayesian Opt for LightGBM-Fair hyper params
 def lgbmfair_bo_oof_score(fair_c, fair_scaling, learning_rate):
@@ -275,7 +276,7 @@ def lgbmfair_bo_oof_score(fair_c, fair_scaling, learning_rate):
     return -1.0 * get_oof_score_lgbm_ext(lg_fair, train_logloss=False)
 
 
-if True:
+if False:
     print ("Bayesian-Optimization of LightGBM-Fair models")
     lgfairBO = BayesianOptimization(lgbmfair_bo_oof_score,
                                     {'fair_c': (0.1,50),

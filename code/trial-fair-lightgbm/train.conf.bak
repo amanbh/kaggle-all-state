@@ -21,7 +21,7 @@ objective = regression-fair
 metric = l1
 
 # frequence for metric output
-metric_freq = 50
+metric_freq = 500
 
 # true if need output metric for training data, alias: tranining_metric, train_metric
 is_training_metric = true
@@ -32,21 +32,21 @@ max_bin = 255
 # training data
 # if exsting weight file, should name to "regression.train.weight"
 # alias: train_data, train
-data = train_1.csv
+data = train_2.csv
 
 # validation data, support multi validation data, separated by ','
 # if exsting weight file, should name to "regression.test.weight"
 # alias: valid, test, test_data, 
-test_data = cv_1.csv
+test_data = cv_2.csv
 
 # number of trees(iterations), alias: num_tree, num_iteration, num_iterations, num_round, num_rounds
 num_trees = 20000
 
 # shrinkage rate , alias: shrinkage_rate
-learning_rate = 0.003
+learning_rate = 0.002
 
 # number of leaves for one tree, alias: num_leaf
-num_leaves = 150
+num_leaves = 31
 
 # type of tree learner, support following types:
 # serial , single machine version
@@ -61,10 +61,10 @@ tree_learner = serial
 
 # feature sub-sample, will random select 80% feature to train on each iteration 
 # alias: sub_feature
-feature_fraction = 0.2
+feature_fraction = 0.9
 
 # Support bagging (data sub-sample), will perform bagging every 5 iterations
-bagging_freq = 10
+bagging_freq = 5
 
 # Bagging farction, will random select 80% data on bagging
 # alias: sub_row
@@ -72,10 +72,10 @@ bagging_fraction = 0.8
 
 # minimal number data for one leaf, use this to deal with over-fit
 # alias : min_data_per_leaf, min_data
-min_data_in_leaf = 8
+min_data_in_leaf = 100
 
 # minimal sum hessians for one leaf, use this to deal with over-fit
-min_sum_hessian_in_leaf = 22.0
+min_sum_hessian_in_leaf = 5.0
 
 # save memory and faster speed for sparse feature, alias: is_sparse
 is_enable_sparse = false

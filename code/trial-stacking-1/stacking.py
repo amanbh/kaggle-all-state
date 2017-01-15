@@ -16,10 +16,15 @@ from IPython.display import display
 import json
 import pickle
 import sys
+import subprocess
+import time
+from scipy.optimize import minimize
+from scipy.stats import skew, boxcox
+from sklearn.preprocessing import StandardScaler
 
 ID = 'id'
 TARGET = 'loss'
-NFOLDS = 5
+NFOLDS = 4
 SEED = 0
 NROWS = None
 DATA_DIR = "../../input"
@@ -27,7 +32,7 @@ DATA_DIR = "../../input"
 TRAIN_FILE = "{0}/train.csv".format(DATA_DIR)
 TEST_FILE = "{0}/test.csv".format(DATA_DIR)
 SUBMISSION_FILE = "{0}/sample_submission.csv".format(DATA_DIR)
-USE_PICKLED = True
+USE_PICKLED = False
 
 if not USE_PICKLED:
     print("Loading training data from {}".format(TRAIN_FILE))
@@ -52,6 +57,18 @@ if not USE_PICKLED:
     for feat in cats:
         train_test[feat] = pd.factorize(train_test[feat], sort=True)[0]
     
+    numeric_feats = [ feat for feat in features if 'cont' in feat ]
+    # compute skew and do Box-Cox transformation (Tilli)
+    skewed_feats = train[numeric_feats].apply(lambda x: skew(x.dropna()))
+    print("\nSkew in numeric features:")
+    print(skewed_feats)
+    skewed_feats = skewed_feats[skewed_feats > 0.25]
+    skewed_feats = skewed_feats.index
+
+    for feats in skewed_feats:
+        train_test[feats] = train_test[feats] + 1
+        train_test[feats], lam = boxcox(train_test[feats])
+
     print ("Head ( train_test ) : ")
     print (train_test.head())
 
@@ -67,6 +84,18 @@ else:
 
 
 kf = KFold(ntrain, n_folds=NFOLDS, shuffle=False, random_state=SEED)
+
+def get_timestamp():
+    return time.strftime("%Y%m%dT%H%M%S")
+
+
+def load_submission(DATA_DIR="../../input"):
+    """
+    Returns sample_submission.csv as a pd.DataFrame
+    """
+    SUBMISSION_FILE = "{0}/sample_submission.csv".format(DATA_DIR)
+    submission = pd.read_csv(SUBMISSION_FILE)
+    return submission
 
 
 class SklearnWrapper(object):
@@ -172,6 +201,7 @@ def load_results_from_json(filename):
         res = json.load(infile)
         res['oof_train'] = np.array(res['oof_train'])
         res['oof_test']  = np.array(res['oof_test'])
+        print('Loaded {}'.format(res['name']))
         return res
 
 
@@ -179,11 +209,289 @@ def load_results_from_csv(oof_train_filename, oof_test_filename):
     res = dict({'name': oof_train_filename})
     res['oof_train'] = np.array(pd.read_csv(oof_train_filename)['loss']).reshape(-1,1)
     res['oof_test']  = np.array(pd.read_csv(oof_test_filename)['loss']).reshape(-1,1)
+    print('Loaded {}'.format(res['name']))
     return res
 
+LOAD_L1_FROM_CSV = True
+if LOAD_L1_FROM_CSV:
+    print('Loading level-0 models from csv\'s')
+    # res_lg_fair = load_results_from_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K.json')
+    res_lg_fair = load_results_from_json('model_fair_c_2_w_100_lr_0.002_trees_20K.json')
+    res_et = load_results_from_json('model_et.json')
+    # res_rf = load_results_from_json('model_rf.json')
+    res_rf_depth_12 = load_results_from_json('skl_rf-20161108T012715.json')
+    res_keras = load_results_from_csv(
+            'keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv',
+            'keras_1/submission_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv')
+    res_keras_2 = load_results_from_csv(
+            'keras_2/oof_train.csv',
+            'keras_2/submission.csv')
+    res_keras_3 = load_results_from_csv(
+            'keras_3/oof_train.csv',
+            'keras_3/submission.csv')
+    res_keras_A4 = load_results_from_csv(
+            'keras_A4/oof_train.csv',
+            'keras_A4/submission.csv')
+    
+    res_lg_l2_1 = load_results_from_json('model_l2_lr_0.01_trees_7K.json')
+    res_lg_l2_2 = load_results_from_json('model_l2_bopt_run1_index75.json')
+    res_lg_l2_3 = load_results_from_json('model_l2_bopt_run2_index92.json')
+    
+    res_xgb = load_results_from_json('model_xgb_3.json')
+    res_xgb_vlad_bs1_fast = load_results_from_json('../stacked_ensembles/test_xgb_A1-20161103T205502.json')
+    res_xgb_vlad_bs1 = load_results_from_json('../stacked_ensembles/xgb_Vladimir_base_score_1-20161103T230621.json')
+    res_xgb_1117_A1 = load_results_from_json('./xgb-1117-attempt1-20161107T234751.json')
+    
+    def elem_wise_mean(x, y):
+        shp = x.shape
+        return np.mean(np.concatenate((x, y), axis=1), axis=1).reshape(shp)
+    res_AM_1 = {
+            'name': 'mean_keras_2_xgb_Vladimir_base_score_1-20161103T230621',
+            'oof_train': elem_wise_mean(res_keras_2['oof_train'], res_xgb_vlad_bs1['oof_train']),
+            'oof_test': elem_wise_mean(res_keras_2['oof_test'], res_xgb_vlad_bs1['oof_test']) }
+    
+    res_keras_A5_1 = load_results_from_csv(
+            './keras_A5_1/oof_train.csv',
+            './keras_A5_1/oof_test.csv' )
+    
+    res_keras_A5_2 = load_results_from_csv(
+            './keras_A5_2/oof_train.csv',
+            './keras_A5_2/oof_test.csv' )
+    
+    res_lgbm_l2_ll_extremin_1112_1 = load_results_from_json('lgbm_l2_loglossshift_extremin_1112-20161110T023325.json')
+    res_lgbm_l2_ll_extremin_1112_2 = load_results_from_json('lgbm_l2_loglossshift_extremin_1112-lr_0.003-20161110T031110.json')
+    res_lgbm_l2_ll_extremin_1112_3 = load_results_from_json('lgbm_l2_loglossshift500_extremin_1112-lr_0.01-20161113T203540.json')
+    
+    
+    res_keras_A5_11 = load_results_from_csv(
+            './keras_A5_11/oof_train.csv',
+            './keras_A5_11/oof_test.csv' )
+    res_keras_A6_1 = load_results_from_csv(
+            './keras_A6_1/oof_train.csv',
+            './keras_A6_1/oof_test.csv' )
+    res_keras_A6_2 = load_results_from_csv(
+            './keras_A6_2/oof_train.csv',
+            './keras_A6_2/oof_test.csv' )
+    res_keras_A7_1 = load_results_from_csv(
+            './keras_A7_1/oof_train.csv',
+            './keras_A7_1/oof_test.csv' )
+    res_keras_A8_1 = load_results_from_csv(
+            './keras_A8_1/oof_train.csv',
+            './keras_A8_1/oof_test.csv' )
+    
+    res_xgb_1109_A1 = load_results_from_json('xgb-1109-attempt_1-20161114T223803.json')
+    res_xgb_1109_A2 = load_results_from_json('xgb-1109-attempt_2-20161115T231535.json')
+    res_xgb_1109_A3 = load_results_from_json('xgb-1109-attempt_3-20161116T091620.json')
+    res_ridge_quad_1000_1  = load_results_from_json('skl_Ridge-quad-100020161117T103454.json')
+    res_ridge_quad_1000_2  = load_results_from_json('skl_Ridge-quad-100020161117T104911.json')
+    res_ridge_quad_1000_3  = load_results_from_json('skl_Ridge-quad-100020161117T110254.json')
+    res_ridge_quad_1000_4  = load_results_from_json('skl_Ridge-quad-100020161117T111651.json')
+    res_ridge_quad_1000_5  = load_results_from_json('skl_Ridge-quad-100020161117T113232.json')
+    res_ridge_quad_1000_6  = load_results_from_json('skl_Ridge-quad-100020161117T114551.json')
+    res_ridge_quad_1000_7  = load_results_from_json('skl_Ridge-quad-100020161117T120118.json')
+    res_ridge_quad_1000_8  = load_results_from_json('skl_Ridge-quad-100020161117T121525.json')
+    res_ridge_quad_1000_9  = load_results_from_json('skl_Ridge-quad-100020161117T123053.json')
+    res_ridge_quad_1000_10 = load_results_from_json('skl_Ridge-quad-100020161117T124430.json')
+    
+    res_xgb_1109_A4 = load_results_from_json('xgb-1109-attempt_4-base_score_7.7-20161119T202505.json')
+    res_xgb_1109_A5 = load_results_from_json('xgb-1109-attempt_5-preprocessor_pow_0.25_shift_1-20161119T225103.json')
+    res_xgb_1109_A5b = load_results_from_json('xgb-1109-attempt_5-preprocessor_pow_0.2_shift_10-20161120T055959.json')
+    res_xgb_1109_A8 = load_results_from_json('xgb-1109-attempt_8-obj_reglinear-preprocessor_pow_0.2_shift_10-20161120T225122.json')
+    res_xgb_1109_A9 = load_results_from_json('xgb-1109-attempt_9-obj_reglinear-preprocessor_log_shift_200-20161121T092757.json')
+    
+    res_xgb_mrooijer_1 = load_results_from_json('xgb-mrooijer_1130-attempt_1-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161121T215220.json')
+    res_xgb_mrooijer_2 = load_results_from_json('xgb-mrooijer_1130-attempt_2-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161121T232803.json')
+    res_xgb_mrooijer_5 = load_results_from_json('xgb-mrooijer_1130-attempt_5-obj_fair0.7-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161122T214600.json')
+    
+    res_xgb_mrooijer_lin_A1 = load_results_from_json('xgb-mrooijer-lin-attempt_1-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161123T001744.json')
+    res_xgb_mrooijer_lin_A2 = load_results_from_json('xgb-mrooijer-lin-attempt_2-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161123T013341.json')
+    
+    
+    # AM_2
+    w = 65
+    p = 7
+    AM_2_train = (w/100*res_xgb_mrooijer_lin_A2['oof_train'] + res_keras_2['oof_train']*(1-w/100))**(1+p/10000)
+    AM_2_test  = (w/100*res_xgb_mrooijer_lin_A2['oof_test']  + res_keras_2['oof_test']*(1-w/100))**(1+p/10000)
+    res_AM_2 = {
+            'name': 'weighted_mean_keras_2_xgb_moo_lin_A2_w_65_p_7',
+            'oof_train': AM_2_train,
+            'oof_test': AM_2_test }
+    
+    res_keras_A9_1 = load_results_from_csv(
+            './keras_A9_1/oof_train.csv',
+            './keras_A9_1/oof_test.csv' )
+    res_keras_A9_2 = load_results_from_csv(
+            './keras_A9_2/oof_train.csv',
+            './keras_A9_2/oof_test.csv' )
+    res_keras_A9_3 = load_results_from_csv(
+            './keras_A9_3/oof_train.csv',
+            './keras_A9_3/oof_test.csv' )
+    res_keras_A9_4 = load_results_from_csv(
+            './keras_A9_4/oof_train.csv',
+            './keras_A9_4/oof_test.csv' )
+    res_keras_A9_5 = load_results_from_csv(
+            './keras_A9_5/oof_train.csv',
+            './keras_A9_5/oof_test.csv' )
+    
+    res_keras_A9_5_adadelta = load_results_from_csv(
+            './keras_A9_5_adadelta/oof_train.csv',
+            './keras_A9_5_adadelta/oof_test.csv' )
+    res_keras_A9_6 = load_results_from_csv(
+            './keras_A9_6_nfold10_nbags3_batch128/oof_train.csv',
+            './keras_A9_6_nfold10_nbags3_batch128/oof_test.csv' )
+    res_keras_10_A1 = load_results_from_csv(
+            './keras_10_A1/oof_train.csv',
+            './keras_10_A1/oof_test.csv' )
+    res_xgb_moo_lin_A3 = load_results_from_json('xgb-mrooijer-lin-attempt_3-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161203T211419.json')
+    res_xgb_moo_lin_A4 = load_results_from_json('xgb-mrooijer-lin-attempt_4-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161204T123341.json')
+    res_xgb_moo_lin_A5 = load_results_from_json('xgb-mrooijer-lin-attempt_5-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161205T101649.json')
+    res_xgb_moo_lin_A6 = load_results_from_json('xgb-mrooijer-lin-attempt_6-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161207T230841.json')
+    
+    res_keras_classify_10_A1 = load_results_from_csv(
+            './keras_classify_10_A1/oof_train.csv',
+            './keras_classify_10_A1/oof_test.csv' )
+    res_keras_11_BN_deep_arch_A1 = load_results_from_csv(
+            './keras_11_BN_deep_arch_A1/oof_train.csv',
+            './keras_11_BN_deep_arch_A1/oof_test.csv' )
+    res_lgbm_fair15_A1 = load_results_from_json('lgbm_fair_c_1.5_w_100-leaf_2000-lr_0.01-max_3500_trees-20161209T182238.json')
+    
+    res_xgb_moo_lin_A8 = load_results_from_json('xgb-mrooijer-lin-attempt_8-obj_fair1.5-preprocessor_pow_0.32_shift_1-base_score-13.60279000422951-20161210T172004.json')
+    res_xgb_moo_lin_A9 = load_results_from_json('xgb-mrooijer-lin-attempt_9-obj_fair0.7-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161210T194415.json')
+    res_xgb_moo_lin_A11 = load_results_from_json('xgb-mrooijer-lin-attempt_11-obj_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161211T011318.json')
 
-res_keras = load_results_from_csv('keras_1/oof_train_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv', 'keras_1/submission_keras_400_0.4_200_0.2_nbags_4_nepochs_55_nfolds_5.csv')
-print("Keras_1-CV: {}".format(mean_absolute_error(y_train, res_keras['oof_train'])))
+    res_keras_12_mae_on_pow_032_shift_1_Stratified = load_results_from_csv(
+            './keras_12_mae_on_pow_0.32_shift_1_Stratified/oof_train.csv',
+            './keras_12_mae_on_pow_0.32_shift_1_Stratified/oof_test.csv' )
+
+    res_xgb_moo_lin_A12 = load_results_from_json('xgb-mrooijer-lin-attempt_12-obj_logy_fair1.5-preprocessor_pow_0.25_shift_1-base_score-8.4738505029380491-20161211T233814.json')
+    res_xgb_moo_lin_A13 = load_results_from_json('xgb-mrooijer-lin-attempt_13-obj_fair0.7-preprocessor_pow_0.32_shift_1-base_score-13.60279000422951-20161212T001354.json')
+
+    res_array = [
+            res_lg_fair,
+            res_et,
+            res_rf_depth_12,
+            res_keras,
+            res_keras_2,
+            res_keras_3,
+            res_keras_A4,
+            res_lg_l2_1,
+            res_lg_l2_2,
+            res_lg_l2_3,
+            res_xgb,
+            res_xgb_vlad_bs1_fast,
+            res_xgb_vlad_bs1,
+            res_xgb_1117_A1,
+            # res_AM_1,
+            res_keras_A5_1,
+            res_keras_A5_2,
+            res_keras_A5_11,
+            res_lgbm_l2_ll_extremin_1112_1,
+            res_lgbm_l2_ll_extremin_1112_2,
+    	    res_lgbm_l2_ll_extremin_1112_3,
+            res_keras_A6_1,
+            res_keras_A6_2,
+            res_keras_A7_1,
+            res_keras_A8_1,
+            res_xgb_1109_A1,
+            res_xgb_1109_A2,
+            res_xgb_1109_A3,
+            res_ridge_quad_1000_1,
+            res_ridge_quad_1000_2,
+            res_ridge_quad_1000_3,
+            res_ridge_quad_1000_4,
+            res_ridge_quad_1000_5,
+            res_ridge_quad_1000_6,
+            res_ridge_quad_1000_7,
+            res_ridge_quad_1000_8,
+            res_ridge_quad_1000_9,
+            res_ridge_quad_1000_10,
+            res_xgb_1109_A4,
+            res_xgb_1109_A5,
+            res_xgb_1109_A5b,
+            res_xgb_1109_A8,
+            res_xgb_1109_A9,
+            res_xgb_mrooijer_1,
+            res_xgb_mrooijer_2,
+            res_xgb_mrooijer_5,
+            res_xgb_mrooijer_lin_A1,
+            res_xgb_mrooijer_lin_A2,
+            res_keras_A9_1,
+            res_keras_A9_2,
+            # res_keras_A9_3,
+            res_keras_A9_4,
+            res_keras_A9_5,
+            res_keras_A9_5_adadelta,
+            res_keras_A9_6,
+            res_keras_10_A1,
+            res_AM_2,
+            res_xgb_moo_lin_A3,
+            res_xgb_moo_lin_A4,
+            res_xgb_moo_lin_A5,
+            res_xgb_moo_lin_A6,
+            res_keras_classify_10_A1,
+            res_keras_11_BN_deep_arch_A1,
+            res_lgbm_fair15_A1,
+            res_xgb_moo_lin_A8,
+            res_xgb_moo_lin_A9,
+            res_xgb_moo_lin_A11,
+            res_keras_12_mae_on_pow_032_shift_1_Stratified,
+            res_xgb_moo_lin_A12,
+            res_xgb_moo_lin_A13,
+            ]
+    
+    
+    l1_x_train = np.concatenate([r['oof_train'] for r in res_array], axis=1)
+    l1_x_test  = np.concatenate([r['oof_test' ] for r in res_array], axis=1)
+    
+    with open('l1_data.pkl', 'wb') as pkl_file:
+        pickle.dump( (l1_x_train, l1_x_test, y_train, res_array), pkl_file)
+    
+else:
+    print('Loading level-0 models from l1_data.pkl')
+    with open('l1_data.pkl', 'rb') as pkl_file:
+        (l1_x_train, l1_x_test, y_train, res_array) = pickle.load(pkl_file)
+
+for i, r in enumerate(res_array):
+    cv_err  = np.abs(y_train - r['oof_train'].flatten())
+    cv_mean = np.mean(cv_err)
+    cv_std  = np.std(cv_err)
+    print ("Model {0}: \tCV = {2:.3f}+{3:.1f}, \tName = {1} ".format(
+        i, r['name'], cv_mean, cv_std))
+    
+## remove negative entries
+l1_x_train[l1_x_train < 0] = 1
+l1_x_test[l1_x_test < 0] = 1
+
+
+## add additional columns like base features
+if False:
+    l1_x_train = np.concatenate([x_train, l1_x_train], axis=1)
+    l1_x_test  = np.concatenate([x_test,  l1_x_test],  axis=1)
+if True:
+    lin_train = pd.read_csv('../../input/all-the-allstate-dates-eda/lin_train.csv')
+    lin_test  = pd.read_csv('../../input/all-the-allstate-dates-eda/lin_test.csv')
+    lin_feats = [feat for feat in lin_train.columns if 'lin_cont' in feat]
+    print(lin_feats)
+    lin_train_array = lin_train[lin_feats].as_matrix()
+    lin_test_array  = lin_test[lin_feats].as_matrix()
+    l1_x_train = np.concatenate([lin_train_array, l1_x_train], axis=1)
+    l1_x_test  = np.concatenate([lin_test_array,  l1_x_test],  axis=1)
+if True:
+    COMB_FEATURE = 'cat80,cat87,cat57,cat12,cat79'.split(',')
+    # COMB_FEATURE = 'cat80,cat87,cat79,cat89'.split(',')
+    # COMB_FEATURE = 'cat80,cat87,cat57,cat12,cat79,cat10,cat7,cat89,cat2,cat72'.split(',')
+    for c in COMB_FEATURE:
+        dummy = pd.get_dummies(train_test[c].astype('category'))
+        l1_x_train = np.concatenate([l1_x_train, dummy[:ntrain]], axis=1)
+        l1_x_test  = np.concatenate([l1_x_test,  dummy[ntrain:]], axis=1)
+
+print("{},{}".format(l1_x_train.shape, l1_x_test.shape))
+
+
+################################################################################
+########    Old code to generate some of the first models                #######
+################################################################################
+
 
 if False:
     et_params = {
@@ -197,8 +505,6 @@ if False:
     et = SklearnWrapper(clf=ExtraTreesRegressor, seed=SEED, params=et_params)
     et_oof_train, et_oof_test = get_oof(et)
     save_results_to_json('model_et', et_params, et_oof_test, et_oof_train)
-res_et = load_results_from_json('model_et.json')
-print("ET-CV: {}".format(mean_absolute_error(y_train, res_et['oof_train'])))
 
 
 if False:
@@ -214,8 +520,6 @@ if False:
     rf = SklearnWrapper(clf=RandomForestRegressor, seed=SEED, params=rf_params)
     rf_oof_train, rf_oof_test = get_oof(rf)
     save_results_to_json('model_rf', rf_params, rf_oof_test, rf_oof_train)
-# res_rf = load_results_from_json('model_rf.json')
-# print("RF-CV: {}".format(mean_absolute_error(y_train, rf_oof_train)))
 
 
 if False:
@@ -242,8 +546,6 @@ if False:
     # save_results_to_json('model_xgb_1', xgb_params, xgb_oof_test, xgb_oof_train)
     # save_results_to_json('model_xgb_2', xgb_params, xgb_oof_test, xgb_oof_train)
     # save_results_to_json('model_xgb_3', xgb_params, xgb_oof_test, xgb_oof_train) # Fix incorrect sign of shift term in predictions from model_2
-res_xgb = load_results_from_json('model_xgb_3.json')
-print("XG-CV: {}".format(mean_absolute_error(y_train, res_xgb['oof_train'])))
 
 
 
@@ -294,9 +596,6 @@ if False:
     lg_fair = LightgbmWrapper(seed=SEED, params=lightgbm_params_fair)
     lg_oof_train_fair, lg_oof_test_fair = get_oof(lg_fair)
     save_results_to_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K', lightgbm_params_fair, lg_oof_test_fair, lg_oof_train_fair)
-# res_lg_fair = load_results_from_json('model_fair_c_15.16_w_194.388_lr_0.00588_trees_50K.json')
-res_lg_fair = load_results_from_json('model_fair_c_2_w_100_lr_0.002_trees_20K.json')
-print("LG_Fair-CV: {}".format(mean_absolute_error(y_train, res_lg_fair['oof_train'])))
 
 
 if False:
@@ -364,64 +663,273 @@ if False:
     lg_oof_train_l2, lg_oof_test_l2 = get_oof(lg_l2)
     # save_results_to_json('model_l2_bopt_run1_index75', lightgbm_params_l2, lg_oof_test_l2, lg_oof_train_l2)
     # save_results_to_json('model_l2_bopt_run2_index92', lightgbm_params_l2, lg_oof_test_l2, lg_oof_train_l2)
-res_lg_l2_1 = load_results_from_json('model_l2_lr_0.01_trees_7K.json')
-res_lg_l2_2 = load_results_from_json('model_l2_bopt_run1_index75.json')
-res_lg_l2_3 = load_results_from_json('model_l2_bopt_run2_index92.json')
-# print("LG_L2-CV: {}".format(mean_absolute_error(y_train, res_lg_l2['oof_train'])))
-print("LG_L2 ({})-CV: {}".format(res_lg_l2_1['name'], mean_absolute_error(y_train, res_lg_l2_1['oof_train'])))
-print("LG_L2 ({})-CV: {}".format(res_lg_l2_2['name'], mean_absolute_error(y_train, res_lg_l2_2['oof_train'])))
-print("LG_L2 ({})-CV: {}".format(res_lg_l2_3['name'], mean_absolute_error(y_train, res_lg_l2_3['oof_train'])))
 
-res_xgb_vlad_bs1_fast = load_results_from_json('../stacked_ensembles/test_xgb_A1-20161103T205502.json')
-res_array = [res_lg_fair,
-             # res_et,
-             res_keras,
-             res_lg_l2_1,
-             res_lg_l2_2,
-             res_lg_l2_3,
-             res_xgb,
-             res_xgb_vlad_bs1_fast,
-            ]
 
-for i, r in enumerate(res_array):
-    cv_err  = np.abs(y_train - r['oof_train'].flatten())
-    cv_mean = np.mean(cv_err)
-    cv_std  = np.std(cv_err)
-    print ("Model {0}: \tCV = {2:.3f}+{3:.1f}, \tName = {1} ".format(i, r['name'], cv_mean, cv_std))
 
-x_train = np.concatenate([r['oof_train'] for r in res_array], axis=1)
-x_test  = np.concatenate([r['oof_test' ] for r in res_array], axis=1)
+##########################################################################################
+############################    XGBoost  Stacking    #####################################
+##########################################################################################
 
-print("{},{}".format(x_train.shape, x_test.shape))
+if False:
+    dtrain = xgb.DMatrix(l1_x_train, label=y_train)
+    dtest = xgb.DMatrix(l1_x_test)
+    
+    # def score_xgb_level1(max_depth, min_child_weight, gamma):
+    max_depth = 6
+    min_child_weight = 1
+    gamma = 1
+    xgb_params = {
+        'seed': 0,
+        'colsample_bytree': 0.8,
+        'silent': 1,
+        'subsample': 0.6,
+        'learning_rate': 0.01,
+        'objective': 'reg:linear',
+        'max_depth': int(max_depth), # 6,
+        'num_parallel_tree': 1,
+        'min_child_weight': int(min_child_weight), # 1,
+        'eval_metric': 'mae',
+        'gamma': gamma,
+    }
+    res = xgb.cv(xgb_params, dtrain, num_boost_round=5000, nfold=NFOLDS, seed=SEED,
+                 stratified=False, early_stopping_rounds=25, verbose_eval=25, show_stdv=True)
+    best_nrounds = res.shape[0] - 1
+    cv_mean = res.iloc[-1, 0]
+    cv_std = res.iloc[-1, 1]
+    print('Ensemble-CV: {0:.3f}+{1:.1f}'.format(cv_mean, cv_std))
+    print('Best Rounds: {}'.format(best_nrounds))
+    # return -1.0 * cv_mean
+    
+    # xgbBO = BayesianOptimization(
+    #             score_xgb_level1,
+    #             { 'max_depth': (2, 13),
+    #               'min_child_weight': (1,50),
+    #               'gamma': (0.01, 100)
+    #             })
+    # xgbBO.explore({'max_depth': [6],
+    #                'min_child_weight': [1],
+    #                'gamma': [1] })
+    # xgbBO.maximize(n_iter=10,kappa=5)
+    # print(xgbBO.res['max']['max_val'])
+    # print(xgbBO.res['max']['max_params'])
+    
+    gbdt = xgb.train(xgb_params, dtrain, int(best_nrounds * (1)))
+    
+    submission = pd.read_csv(SUBMISSION_FILE)
+    submission.iloc[:, 1] = gbdt.predict(dtest)
+    submission.to_csv('xgstacker.sub.csv', index=None)
 
-dtrain = xgb.DMatrix(x_train, label=y_train)
-dtest = xgb.DMatrix(x_test)
 
-xgb_params = {
-    'seed': 0,
-    'colsample_bytree': 0.8,
-    'silent': 1,
-    'subsample': 0.6,
-    'learning_rate': 0.003,
-    'objective': 'reg:linear',
-    'max_depth': 6,
-    'num_parallel_tree': 1,
-    'min_child_weight': 1,
-    'eval_metric': 'mae',
-}
+##########################################################################################
+############################   Keras Stacking    #########################################
+##########################################################################################
 
-res = xgb.cv(xgb_params, dtrain, num_boost_round=5000, nfold=NFOLDS, seed=SEED,
-             stratified=False, early_stopping_rounds=25, verbose_eval=10, show_stdv=True)
 
-best_nrounds = res.shape[0] - 1
-cv_mean = res.iloc[-1, 0]
-cv_std = res.iloc[-1, 1]
+if True:
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.cross_validation import KFold, StratifiedKFold
+    from keras.models import Sequential, load_model
+    from keras.layers import Dense, Dropout, Activation, Lambda
+    from keras.layers.normalization import BatchNormalization
+    from keras.layers.advanced_activations import PReLU
+    from keras.callbacks import EarlyStopping
+    from keras.callbacks import ModelCheckpoint
+    from keras.regularizers import l2
+    
+    ## code to generate batches
+    def batch_generator(X, y, batch_size, shuffle):
+        #chenglong code for fiting from generator (https://www.kaggle.com/c/talkingdata-mobile-user-demographics/forums/t/22567/neural-network-for-sparse-matrices)
+        number_of_batches = np.ceil(X.shape[0]/batch_size)
+        counter = 0
+        sample_index = np.arange(X.shape[0])
+        if shuffle:
+            np.random.shuffle(sample_index)
+        while True:
+            batch_index = sample_index[batch_size*counter:batch_size*(counter+1)]
+            # X_batch = X[batch_index,:].toarray()
+            X_batch = X[batch_index,:]
+            y_batch = y[batch_index]
+            counter += 1
+            yield X_batch, y_batch
+            if (counter == number_of_batches):
+                if shuffle:
+                    np.random.shuffle(sample_index)
+                counter = 0
+    
+    ## code to generate batches for prediction
+    def batch_generatorp(X, batch_size, shuffle):
+        number_of_batches = X.shape[0] / np.ceil(X.shape[0]/batch_size)
+        counter = 0
+        sample_index = np.arange(X.shape[0])
+        while True:
+            batch_index = sample_index[batch_size * counter:batch_size * (counter + 1)]
+            # X_batch = X[batch_index, :].toarray()
+            X_batch = X[batch_index, :]
+            counter += 1
+            yield X_batch
+            if (counter == number_of_batches):
+                counter = 0
+    
+    ## neural net
+    def nn_model():
+        model = Sequential()
+        model.add(Dense(100, input_dim = l1_x_train.shape[1], init = 'he_normal'))
+        # model.add(Dense(100, input_dim = l1_x_train.shape[1], init = 'he_normal', W_regularizer=l2(0)))
+        model.add(BatchNormalization())
+        model.add(PReLU())
+        model.add(Dropout(0.3))
+        model.add(Dense(50, init = 'he_normal'))
+        model.add(BatchNormalization())
+        model.add(PReLU())
+        model.add(Dropout(0.3))
+        model.add(Dense(1, init = 'he_normal'))
+        model.compile(loss = 'mae', optimizer = 'adam')
+        return(model)
+    
+    
+    ## cv-folds
+    nfolds = 5
+    nbags = 3
+    nepochs = 60
+    es_patience = 10
+    nbags_per_fold = 1
+    train_batch_size = 128
+    USE_STRATIFIED = True
+    pred_oob = np.zeros(l1_x_train.shape[0])
+    pred_test = np.zeros(l1_x_test.shape[0])
+    
+    ## train models
+    for J in range(nbags):
+        i = 0
 
-print('Ensemble-CV: {0:.3f}+{1:.1f}'.format(cv_mean, cv_std))
-print('Best Rounds: {}'.format(best_nrounds))
+        if USE_STRATIFIED:
+            perc_values = np.percentile(y_train, range(10,101,10))
+            y_perc = np.zeros_like(y_train)
+            for v in perc_values[:-1]:
+                y_perc += (y_train > v)
+            folds = StratifiedKFold(y_perc, n_folds=nfolds, shuffle=True, random_state=None)
+        else:
+            folds = KFold(len(y_train), n_folds=nfolds, shuffle=True, random_state=None)
 
-gbdt = xgb.train(xgb_params, dtrain, int(best_nrounds * (1)))
+        for (inTr, inTe) in folds:
+            xtr = l1_x_train[inTr]
+            ytr = y_train[inTr]
+            xte = l1_x_train[inTe]
+            yte = y_train[inTe]
+            pred = np.zeros(xte.shape[0])
+            for j in range(nbags_per_fold):
+                model = nn_model()
+                callbacks = [
+                    EarlyStopping(monitor='val_loss', patience=es_patience,
+                        verbose=0, mode='auto'),
+                    ModelCheckpoint('keras.best.hdf5', monitor='val_loss',
+                        save_best_only=True, save_weights_only=False, verbose=1),
+                ]
+                fit = model.fit_generator(generator = batch_generator(xtr, ytr, train_batch_size, True),
+                                          nb_epoch = nepochs,
+                                          samples_per_epoch = xtr.shape[0],
+                                          verbose = 2,
+                                          callbacks = callbacks,
+                                          validation_data = batch_generator(xte, yte, 800, False),
+                                          nb_val_samples = 37600,
+                                         )
+                model = load_model('keras.best.hdf5')
+                pred += model.predict_generator(generator = batch_generatorp(xte, 800, False),
+                                                val_samples = xte.shape[0])[:,0]
+                pred_test += model.predict_generator(generator = batch_generatorp(l1_x_test,800,False),
+                                                     val_samples = l1_x_test.shape[0])[:,0]
+            pred /= nbags_per_fold
+            pred_oob[inTe] += pred
+            score = mean_absolute_error(yte, pred)
+            i += 1
+            print('Fold ', J, '-', i, '- MAE:', score)
+        
+        print('Total (', (J+1), ')- MAE:', mean_absolute_error(y_train, pred_oob/(J+1)))
+    pred_oob /= nbags
+    print('Total MAE:', mean_absolute_error(y_train, pred_oob))
+    
+    pred_test /= (nfolds*nbags*nbags_per_fold)
+    oof_test = pred_test
+    oof_train = pred_oob
+    params = {'model': model.to_yaml(),
+              'nfolds': nfolds,
+              'USE_STRATIFIED': USE_STRATIFIED,
+              'nbags': nbags,
+              'nepochs': nepochs,
+              'es_patience': es_patience,
+              'nbags_per_fold': nbags_per_fold, 
+              'train_batch_size': train_batch_size,
+             }
+    timestamp = get_timestamp()
+    model_key = 'Keras.stacker-' + timestamp
+    print('Saving model as {}'.format(model_key))
+    save_results_to_json(model_key, params, oof_test, oof_train)
 
-submission = pd.read_csv(SUBMISSION_FILE)
-submission.iloc[:, 1] = gbdt.predict(dtest)
-submission.to_csv('xgstacker.sub.csv', index=None)
+    sub = load_submission()
+    sub['loss'] = oof_test
+    sub.to_csv(model_key + '.sub.csv', index=False)
+
+
+##########################################################################################
+##########################   Weighted Mean Stacking  (Tilii)   ###########################
+##########################################################################################
+
+
+if False:
+    ## remove negative entries
+    l1_x_train[l1_x_train < 0] = 1
+    l1_x_test[l1_x_test < 0] = 1
+
+    def mae_loss_func(weights):
+        ''' scipy minimize will pass the weights as a numpy array '''
+        final_prediction = np.sum(weights * l1_x_train, axis=1)
+        # powers = weights[:l1_x_train.shape[1]]
+        # multipliers = weights[l1_x_train.shape[1]:]
+        # final_prediction = np.mean(multipliers * (l1_x_train ** powers), axis=1)
+        err = mean_absolute_error(y_train, final_prediction)
+        # print ('Error = ', err)
+        return err
+    
+    
+    starting_values = np.random.uniform(size=l1_x_train.shape[1])
+    # starting_values = np.concatenate(
+    #                         (np.ones((l1_x_train.shape[1],)),
+    #                          np.random.uniform(size=l1_x_train.shape[1])),
+    #                         axis=0)
+    
+    cons = ({'type':'eq','fun':lambda w: 1-sum(w)})
+    bounds = [(0,1)] * l1_x_train.shape[1]
+    # bounds = [(0.95,1.05)] * l1_x_train.shape[1] + [(0,1.05)] * l1_x_train.shape[1]
+    
+    print('Starting minimize')
+    res = minimize(mae_loss_func, 
+               starting_values, 
+               method = 'SLSQP', 
+               bounds = bounds, 
+               # constraints = cons,
+               options={'maxiter': 100, 'disp': True})
+    
+    best_score = res['fun']
+    weights = res['x']
+    
+    print('Ensamble Score: {}'.format(best_score))
+    print('Best Weights: {}'.format(weights))
+    oof_train = np.sum(weights * l1_x_train, axis=1)
+    oof_test = np.sum(weights * l1_x_test, axis=1)
+    # powers = weights[:l1_x_train.shape[1]]
+    # multipliers = weights[l1_x_train.shape[1]:]
+    # oof_train = np.mean(multipliers * (l1_x_train ** powers), axis=1)
+    # oof_test = np.mean(multipliers * (l1_x_test ** powers), axis=1)
+    
+    params = {'weights': weights.tolist(),
+              'starting_values' : starting_values.tolist(),
+              'bounds': bounds,
+             }
+    timestamp = get_timestamp()
+    model_key = 'WeightedSum.stacker-' + timestamp
+    #model_key = 'PoweredSum.stacker-' + timestamp
+    save_results_to_json(model_key, params, oof_test, oof_train)
+    
+    sub = load_submission()
+    sub['loss'] = oof_test
+    sub.to_csv(model_key + '.sub.csv', index=False)
